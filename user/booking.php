@@ -164,25 +164,23 @@ if ($_POST) {
             $room_stmt->execute([$assigned_room_id]);
         }
 
-        // Create initial payment record
-        $payment_notes = ($payment_method === 'cash') 
-            ? 'Pembayaran tunai / kartu langsung di hotel saat check-in.' 
-            : 'Menunggu proses transaksi / verifikasi bukti transfer.';
+        // Create initial payment record only for cash (Pay at Hotel)
+        if ($payment_method === 'cash') {
+            $payment_data = [
+                'booking_id' => $booking_id,
+                'amount' => $total_amount,
+                'payment_method' => 'cash',
+                'payment_status' => 'pending',
+                'transaction_id' => 'HOTEL-' . strtoupper(substr(uniqid(), -8)),
+                'bank_name' => 'Cash/Front Desk',
+                'notes' => 'Pembayaran tunai / kartu langsung di hotel saat check-in.'
+            ];
             
-        $payment_data = [
-            'booking_id' => $booking_id,
-            'amount' => $total_amount,
-            'payment_method' => $payment_method,
-            'payment_status' => 'pending',
-            'transaction_id' => strtoupper($payment_method) . '-' . strtoupper(substr(uniqid(), -8)),
-            'bank_name' => ($payment_method === 'transfer') ? 'BCA' : null,
-            'notes' => $payment_notes
-        ];
-        
-        $payment_query = "INSERT INTO payments (booking_id, amount, payment_method, payment_status, transaction_id, bank_name, notes) 
-                          VALUES (:booking_id, :amount, :payment_method, :payment_status, :transaction_id, :bank_name, :notes)";
-        $payment_stmt = $db->prepare($payment_query);
-        $payment_stmt->execute($payment_data);
+            $payment_query = "INSERT INTO payments (booking_id, amount, payment_method, payment_status, transaction_id, bank_name, notes) 
+                              VALUES (:booking_id, :amount, :payment_method, :payment_status, :transaction_id, :bank_name, :notes)";
+            $payment_stmt = $db->prepare($payment_query);
+            $payment_stmt->execute($payment_data);
+        }
         
         $db->commit();
         
@@ -191,7 +189,7 @@ if ($_POST) {
             setFlashMessage('success', "Reservasi untuk {$num_rooms} kamar berhasil dibuat! Pembayaran dapat dilakukan langsung di hotel saat check-in.");
             redirect("booking_detail.php?id=" . $booking_id);
         } else {
-            setFlashMessage('success', "Reservasi untuk {$num_rooms} kamar berhasil dibuat! Silakan selesaikan pembayaran Anda.");
+            setFlashMessage('success', "Reservasi untuk {$num_rooms} kamar berhasil dibuat! Silakan lengkapi konfirmasi pembayaran Anda.");
             redirect("payment.php?booking_id=" . $booking_id . "&method=" . $payment_method);
         }
         

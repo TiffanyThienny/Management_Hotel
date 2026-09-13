@@ -19,7 +19,7 @@ $booking = $database->getSingle("
            GROUP_CONCAT(DISTINCT r.room_number ORDER BY r.room_number SEPARATOR ', ') as room_number,
            COUNT(DISTINCT bd.id) as total_rooms_booked,
            rt.type_name, c.full_name, c.email, c.phone,
-           (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE booking_id = b.id AND payment_status != 'refunded') as paid_amount
+           (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE booking_id = b.id AND payment_status = 'paid') as paid_amount
     FROM bookings b
     JOIN booking_details bd ON b.id = bd.booking_id
     JOIN rooms r ON bd.room_id = r.id
@@ -40,47 +40,61 @@ if (!in_array($booking['status'], ['pending', 'confirmed'])) {
     redirect('history.php');
 }
 
+// Calculate remaining amount
+$remaining_amount = max(0, $booking['final_amount'] - $booking['paid_amount']);
+
 // Process payment
 if ($_POST) {
     try {
+        $amount = floatval($_POST['amount'] ?? 0);
+        $payment_method = sanitizeInput($_POST['payment_method'] ?? '');
+        $bank_name = trim(sanitizeInput($_POST['bank_name'] ?? ''));
+        $account_number = trim(sanitizeInput($_POST['account_number'] ?? ''));
+        $transaction_id = trim(sanitizeInput($_POST['transaction_id'] ?? ''));
+        $notes = trim(sanitizeInput($_POST['notes'] ?? ''));
+
+        // All fields are mandatory
+        if ($amount <= 0 || empty($payment_method) || empty($transaction_id) || empty($notes)) {
+            throw new Exception('Semua kolom bertanda bintang (*) wajib diisi lengkap!');
+        }
+
+        if (in_array($payment_method, ['transfer', 'credit_card']) && (empty($bank_name) || empty($account_number))) {
+            throw new Exception('Nama bank dan nomor rekening/kartu pengirim wajib diisi!');
+        }
+
+        if ($amount > $remaining_amount && $remaining_amount > 0) {
+            throw new Exception('Jumlah pembayaran melebihi sisa yang harus dibayar.');
+        }
+
         $data = [
             'booking_id' => $booking_id,
-            'amount' => floatval($_POST['amount']),
-            'payment_method' => sanitizeInput($_POST['payment_method']),
-            'payment_status' => 'pending', // Will be verified by admin
-            'transaction_id' => sanitizeInput($_POST['transaction_id']),
-            'bank_name' => sanitizeInput($_POST['bank_name']),
-            'account_number' => sanitizeInput($_POST['account_number']),
-            'notes' => sanitizeInput($_POST['notes'])
+            'amount' => $amount,
+            'payment_method' => $payment_method,
+            'payment_status' => 'pending', // Will be verified by admin / receptionist
+            'transaction_id' => $transaction_id,
+            'bank_name' => $bank_name,
+            'account_number' => $account_number,
+            'notes' => $notes
         ];
-
-        // Validate amount
-        $remaining_amount = $booking['final_amount'] - $booking['paid_amount'];
-        if ($data['amount'] > $remaining_amount) {
-            throw new Exception('Jumlah pembayaran melebihi sisa yang harus dibayar');
-        }
 
         $result = $database->insert('payments', $data);
         
         if ($result) {
-            // Update booking status to confirmed if full payment
-            if ($data['amount'] >= $remaining_amount) {
+            // Update booking status to confirmed if full payment submitted
+            if ($amount >= $remaining_amount) {
                 $database->update('bookings', ['status' => 'confirmed'], "id = $booking_id");
             }
             
             setFlashMessage('success', 'Konfirmasi pembayaran berhasil dikirim! Tim reservasi kami akan memverifikasinya segera.');
             redirect('history.php');
         } else {
-            throw new Exception('Gagal menyimpan data pembayaran');
+            throw new Exception('Gagal menyimpan data pembayaran.');
         }
         
     } catch (Exception $e) {
         setFlashMessage('error', $e->getMessage());
     }
 }
-
-// Calculate remaining amount
-$remaining_amount = max(0, $booking['final_amount'] - $booking['paid_amount']);
 ?>
 
 <style>
@@ -206,24 +220,24 @@ $remaining_amount = max(0, $booking['final_amount'] - $booking['paid_amount']);
                             <h6 class="fw-bold text-dark small mb-2"><i class="fas fa-university text-primary me-1"></i>Informasi Rekening Pengirim</h6>
                             <div class="row g-3">
                                 <div class="col-md-6">
-                                    <label class="form-label small text-muted">Nama Bank Pengirim *</label>
-                                    <input type="text" class="form-control form-control-luxury" name="bank_name" placeholder="Contoh: BCA, Mandiri, BRI, CIMB">
+                                    <label class="form-label small fw-bold text-dark">Nama Bank Pengirim <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control form-control-luxury" name="bank_name" id="bank_name" placeholder="Contoh: BCA, Mandiri, BRI, CIMB">
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label small text-muted">Nomor Rekening Pengirim *</label>
-                                    <input type="text" class="form-control form-control-luxury" name="account_number" placeholder="Nomor rekening Anda">
+                                    <label class="form-label small fw-bold text-dark">Nomor Rekening Pengirim <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control form-control-luxury" name="account_number" id="account_number" placeholder="Nomor rekening Anda">
                                 </div>
                             </div>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label fw-bold text-dark small">ID Transaksi / Nomor Referensi Transfer</label>
-                            <input type="text" class="form-control form-control-luxury" name="transaction_id" placeholder="Contoh: TRXBCA9871239 (Opsional)">
+                            <label class="form-label fw-bold text-dark small">ID Transaksi / Nomor Referensi Pembayaran <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control form-control-luxury" name="transaction_id" id="transaction_id" placeholder="Contoh: TRXBCA9871239 / No. Resi Pembayaran" required>
                         </div>
 
                         <div class="mb-4">
-                            <label class="form-label fw-bold text-dark small">Catatan Tambahan (Opsional)</label>
-                            <textarea class="form-control form-control-luxury" name="notes" rows="2" placeholder="Tuliskan keterangan pembayaran..."></textarea>
+                            <label class="form-label fw-bold text-dark small">Catatan / Keterangan Pembayaran <span class="text-danger">*</span></label>
+                            <textarea class="form-control form-control-luxury" name="notes" id="notes" rows="2" placeholder="Tuliskan keterangan pembayaran (contoh: 'Transfer via m-BCA a.n Budi' atau 'Tidak ada')..." required></textarea>
                         </div>
 
                         <!-- Payment Instructions Box -->
@@ -400,21 +414,47 @@ $(document).ready(function() {
 
     $('#paymentForm').on('submit', function(e) {
         var method = $('#payment_method').val();
-        var amount = parseFloat($('#amount').val());
+        var amount = parseFloat($('#amount').val()) || 0;
         var remaining = <?php echo $remaining_amount; ?>;
+        var transactionId = $.trim($('#transaction_id').val());
+        var notes = $.trim($('#notes').val());
         
+        if (!method) {
+            alert('Harap pilih metode pembayaran.');
+            e.preventDefault();
+            return;
+        }
+
+        if (amount <= 0) {
+            alert('Nominal pembayaran harus lebih dari 0.');
+            e.preventDefault();
+            return;
+        }
+
+        if (remaining > 0 && amount > remaining) {
+            alert('Jumlah pembayaran tidak boleh melebihi sisa tagihan.');
+            e.preventDefault();
+            return;
+        }
+
         if (method === 'transfer') {
-            var bankName = $('input[name="bank_name"]').val();
-            var accountNumber = $('input[name="account_number"]').val();
+            var bankName = $.trim($('#bank_name').val());
+            var accountNumber = $.trim($('#account_number').val());
             if (!bankName || !accountNumber) {
                 alert('Harap masukkan nama bank dan nomor rekening pengirim.');
                 e.preventDefault();
                 return;
             }
         }
-        
-        if (amount > remaining) {
-            alert('Jumlah pembayaran tidak boleh melebihi sisa tagihan.');
+
+        if (!transactionId) {
+            alert('Harap masukkan ID Transaksi / Nomor Referensi Pembayaran.');
+            e.preventDefault();
+            return;
+        }
+
+        if (!notes) {
+            alert('Harap isi Catatan / Keterangan Pembayaran.');
             e.preventDefault();
             return;
         }
