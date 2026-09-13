@@ -110,6 +110,15 @@ if ($_POST) {
         $price_per_room_total = $nights * $room_type['base_price'];
         $total_amount = $price_per_room_total * $num_rooms;
         
+        // Payment method selection
+        $payment_method = sanitizeInput($_POST['payment_method'] ?? 'transfer');
+        if (!in_array($payment_method, ['transfer', 'qris', 'credit_card', 'cash'])) {
+            $payment_method = 'transfer';
+        }
+
+        // Determine booking status
+        $booking_status = ($payment_method === 'cash') ? 'confirmed' : 'pending';
+
         // Create booking
         $booking_data = [
             'booking_code' => generateBookingCode(),
@@ -121,13 +130,14 @@ if ($_POST) {
             'total_guests' => $total_guests_post,
             'total_amount' => $total_amount,
             'final_amount' => $total_amount,
+            'status' => $booking_status,
             'special_requests' => $special_req,
             'adults' => $adults_post,
             'children' => $children_post
         ];
         
-        $booking_query = "INSERT INTO bookings (booking_code, customer_id, user_id, check_in, check_out, total_nights, total_guests, total_amount, final_amount, special_requests, adults, children) 
-                         VALUES (:booking_code, :customer_id, :user_id, :check_in, :check_out, :total_nights, :total_guests, :total_amount, :final_amount, :special_requests, :adults, :children)";
+        $booking_query = "INSERT INTO bookings (booking_code, customer_id, user_id, check_in, check_out, total_nights, total_guests, total_amount, final_amount, status, special_requests, adults, children) 
+                         VALUES (:booking_code, :customer_id, :user_id, :check_in, :check_out, :total_nights, :total_guests, :total_amount, :final_amount, :status, :special_requests, :adults, :children)";
         $booking_stmt = $db->prepare($booking_query);
         $booking_stmt->execute($booking_data);
         $booking_id = $db->lastInsertId();
@@ -153,12 +163,37 @@ if ($_POST) {
             $room_stmt = $db->prepare($room_query);
             $room_stmt->execute([$assigned_room_id]);
         }
+
+        // Create initial payment record
+        $payment_notes = ($payment_method === 'cash') 
+            ? 'Pembayaran tunai / kartu langsung di hotel saat check-in.' 
+            : 'Menunggu proses transaksi / verifikasi bukti transfer.';
+            
+        $payment_data = [
+            'booking_id' => $booking_id,
+            'amount' => $total_amount,
+            'payment_method' => $payment_method,
+            'payment_status' => 'pending',
+            'transaction_id' => strtoupper($payment_method) . '-' . strtoupper(substr(uniqid(), -8)),
+            'bank_name' => ($payment_method === 'transfer') ? 'BCA' : null,
+            'notes' => $payment_notes
+        ];
+        
+        $payment_query = "INSERT INTO payments (booking_id, amount, payment_method, payment_status, transaction_id, bank_name, notes) 
+                          VALUES (:booking_id, :amount, :payment_method, :payment_status, :transaction_id, :bank_name, :notes)";
+        $payment_stmt = $db->prepare($payment_query);
+        $payment_stmt->execute($payment_data);
         
         $db->commit();
         
-        // Redirect to booking confirmation
-        setFlashMessage('success', "Reservasi untuk {$num_rooms} kamar berhasil dibuat! Silakan lanjutkan ke pembayaran.");
-        redirect("payment.php?booking_id=" . $booking_id);
+        // Redirect according to payment method
+        if ($payment_method === 'cash') {
+            setFlashMessage('success', "Reservasi untuk {$num_rooms} kamar berhasil dibuat! Pembayaran dapat dilakukan langsung di hotel saat check-in.");
+            redirect("booking_detail.php?id=" . $booking_id);
+        } else {
+            setFlashMessage('success', "Reservasi untuk {$num_rooms} kamar berhasil dibuat! Silakan selesaikan pembayaran Anda.");
+            redirect("payment.php?booking_id=" . $booking_id . "&method=" . $payment_method);
+        }
         
     } catch (Exception $e) {
         $db->rollBack();
@@ -273,6 +308,26 @@ if ($selected_room_type && isset($selected_room_type['available_rooms'])) {
         border: 1.5px dashed #cbd5e1;
         border-radius: 18px;
         padding: 24px;
+    }
+    .payment-card-option {
+        border: 2px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 16px;
+        cursor: pointer;
+        transition: all 0.2s ease-in-out;
+        background: #ffffff;
+        position: relative;
+    }
+    .payment-card-option:hover {
+        border-color: #4f46e5;
+        background: #f8fafc;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 15px rgba(79, 70, 229, 0.08);
+    }
+    .payment-card-option.active {
+        border-color: #4f46e5;
+        background: #f5f7ff;
+        box-shadow: 0 4px 15px rgba(79, 70, 229, 0.12);
     }
 </style>
 
@@ -477,17 +532,136 @@ if ($selected_room_type && isset($selected_room_type['available_rooms'])) {
 
                         <hr class="my-4 border-light">
 
-                        <!-- Step 4: Special Request & Price Breakdown -->
+                        <!-- Step 4: Special Request -->
                         <div class="mb-4">
                             <div class="d-flex align-items-center gap-3 mb-3">
                                 <span class="step-badge">4</span>
-                                <h5 class="fw-bold mb-0 text-dark" style="font-family: 'Outfit', sans-serif;">Permintaan Khusus & Ringkasan Biaya</h5>
+                                <h5 class="fw-bold mb-0 text-dark" style="font-family: 'Outfit', sans-serif;">Permintaan Khusus</h5>
                             </div>
                             
-                            <div class="mb-4">
+                            <div class="mb-2">
                                 <label class="form-label fw-bold text-dark small">Permintaan Khusus / Catatan <span class="text-danger">*</span></label>
                                 <textarea class="form-control form-control-luxury" name="special_requests" rows="2" required
-                                          placeholder="Contoh: Kamar bebas asap rokok, lantai atas, atau ketik 'Tidak ada' jika tidak memiliki permintaan khusus."></textarea>
+                                          placeholder="Contoh: Kamar bebas asap rokok, lantai atas, dekat lift, atau ketik 'Tidak ada' jika tidak ada permintaan khusus."></textarea>
+                            </div>
+                        </div>
+
+                        <hr class="my-4 border-light">
+
+                        <!-- Step 5: Payment Method -->
+                        <div class="mb-4">
+                            <div class="d-flex align-items-center justify-content-between mb-3">
+                                <div class="d-flex align-items-center gap-3">
+                                    <span class="step-badge">5</span>
+                                    <h5 class="fw-bold mb-0 text-dark" style="font-family: 'Outfit', sans-serif;">Pilihan Metode Pembayaran</h5>
+                                </div>
+                                <span class="badge bg-light text-primary border px-3 py-1 rounded-pill small fw-semibold">
+                                    <i class="fas fa-shield-alt me-1"></i> Transaksi Aman & Terenkripsi
+                                </span>
+                            </div>
+
+                            <div class="row g-3 mb-3">
+                                <!-- Transfer Bank -->
+                                <div class="col-md-6">
+                                    <div class="payment-card-option active h-100" onclick="selectPaymentMethod('transfer')">
+                                        <div class="d-flex align-items-center justify-content-between mb-2">
+                                            <div class="form-check mb-0">
+                                                <input class="form-check-input" type="radio" name="payment_method" id="pay_transfer" value="transfer" checked>
+                                                <label class="form-check-label fw-bold text-dark cursor-pointer ms-1" for="pay_transfer">
+                                                    Transfer Bank (Virtual Account)
+                                                </label>
+                                            </div>
+                                            <i class="fas fa-university text-primary fs-5"></i>
+                                        </div>
+                                        <p class="text-muted small mb-2 ps-4" style="font-size: 0.82rem;">
+                                            Transfer manual atau VA instan ke rekening resmi BCA, Mandiri, BNI, BRI.
+                                        </p>
+                                        <div class="ps-4 d-flex gap-1 flex-wrap">
+                                            <span class="badge bg-light text-dark border" style="font-size: 0.72rem;">BCA</span>
+                                            <span class="badge bg-light text-dark border" style="font-size: 0.72rem;">Mandiri</span>
+                                            <span class="badge bg-light text-dark border" style="font-size: 0.72rem;">BNI</span>
+                                            <span class="badge bg-light text-dark border" style="font-size: 0.72rem;">BRI</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- QRIS / E-Wallet -->
+                                <div class="col-md-6">
+                                    <div class="payment-card-option h-100" onclick="selectPaymentMethod('qris')">
+                                        <div class="d-flex align-items-center justify-content-between mb-2">
+                                            <div class="form-check mb-0">
+                                                <input class="form-check-input" type="radio" name="payment_method" id="pay_qris" value="qris">
+                                                <label class="form-check-label fw-bold text-dark cursor-pointer ms-1" for="pay_qris">
+                                                    QRIS / E-Wallet Instan
+                                                </label>
+                                            </div>
+                                            <i class="fas fa-qrcode text-success fs-5"></i>
+                                        </div>
+                                        <p class="text-muted small mb-2 ps-4" style="font-size: 0.82rem;">
+                                            Scan QRIS langsung menggunakan GoPay, OVO, DANA, ShopeePay, LinkAja.
+                                        </p>
+                                        <div class="ps-4 d-flex gap-1 flex-wrap">
+                                            <span class="badge bg-success text-white" style="font-size: 0.72rem;">QRIS</span>
+                                            <span class="badge bg-light text-dark border" style="font-size: 0.72rem;">GoPay</span>
+                                            <span class="badge bg-light text-dark border" style="font-size: 0.72rem;">OVO</span>
+                                            <span class="badge bg-light text-dark border" style="font-size: 0.72rem;">DANA</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Kartu Kredit / Debit -->
+                                <div class="col-md-6">
+                                    <div class="payment-card-option h-100" onclick="selectPaymentMethod('credit_card')">
+                                        <div class="d-flex align-items-center justify-content-between mb-2">
+                                            <div class="form-check mb-0">
+                                                <input class="form-check-input" type="radio" name="payment_method" id="pay_cc" value="credit_card">
+                                                <label class="form-check-label fw-bold text-dark cursor-pointer ms-1" for="pay_cc">
+                                                    Kartu Kredit / Debit Online
+                                                </label>
+                                            </div>
+                                            <i class="fas fa-credit-card text-warning fs-5"></i>
+                                        </div>
+                                        <p class="text-muted small mb-2 ps-4" style="font-size: 0.82rem;">
+                                            Pembayaran online instan via jaringan Visa, MasterCard, atau JCB.
+                                        </p>
+                                        <div class="ps-4 d-flex gap-1 flex-wrap">
+                                            <span class="badge bg-light text-dark border" style="font-size: 0.72rem;"><i class="fab fa-cc-visa text-primary me-1"></i>Visa</span>
+                                            <span class="badge bg-light text-dark border" style="font-size: 0.72rem;"><i class="fab fa-cc-mastercard text-danger me-1"></i>MasterCard</span>
+                                            <span class="badge bg-light text-dark border" style="font-size: 0.72rem;"><i class="fab fa-cc-jcb text-info me-1"></i>JCB</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Bayar di Hotel -->
+                                <div class="col-md-6">
+                                    <div class="payment-card-option h-100" onclick="selectPaymentMethod('cash')">
+                                        <div class="d-flex align-items-center justify-content-between mb-2">
+                                            <div class="form-check mb-0">
+                                                <input class="form-check-input" type="radio" name="payment_method" id="pay_cash" value="cash">
+                                                <label class="form-check-label fw-bold text-dark cursor-pointer ms-1" for="pay_cash">
+                                                    Bayar di Hotel (Pay at Hotel)
+                                                </label>
+                                            </div>
+                                            <i class="fas fa-hotel text-info fs-5"></i>
+                                        </div>
+                                        <p class="text-muted small mb-2 ps-4" style="font-size: 0.82rem;">
+                                            Pesan tanpa bayar di awal. Pelunasan tunai/debit saat tiba di meja resepsionis.
+                                        </p>
+                                        <div class="ps-4">
+                                            <span class="badge bg-info text-dark" style="font-size: 0.72rem;"><i class="fas fa-check-circle me-1"></i>Tanpa DP / Bebas Biaya Awal</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr class="my-4 border-light">
+
+                        <!-- Step 6: Price Breakdown & Final Confirmation -->
+                        <div class="mb-4">
+                            <div class="d-flex align-items-center gap-3 mb-3">
+                                <span class="step-badge">6</span>
+                                <h5 class="fw-bold mb-0 text-dark" style="font-family: 'Outfit', sans-serif;">Ringkasan Biaya Reservasi</h5>
                             </div>
 
                             <div class="pricing-summary-card mb-4">
@@ -509,9 +683,13 @@ if ($selected_room_type && isset($selected_room_type['available_rooms'])) {
                                             <span class="text-muted small">Total Tamu:</span>
                                             <strong class="text-dark" id="guests_display">-</strong>
                                         </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span class="text-muted small">Metode Pembayaran:</span>
+                                            <span class="badge bg-primary text-white" id="pay_method_summary">Transfer Bank</span>
+                                        </div>
                                         <hr class="my-2">
                                         <div class="d-flex justify-content-between align-items-center">
-                                            <span class="fw-bold text-dark fs-6">TOTAL PEMBAYARAN:</span>
+                                            <span class="fw-bold text-dark fs-6">TOTAL TAGIHAN:</span>
                                             <span class="fw-extrabold fs-4 text-primary" id="total_display" style="font-family: 'Outfit', sans-serif;">Rp 0</span>
                                         </div>
                                     </div>
@@ -532,7 +710,7 @@ if ($selected_room_type && isset($selected_room_type['available_rooms'])) {
                         <!-- Submit Button -->
                         <div class="d-grid">
                             <button type="submit" id="btnSubmit" class="btn btn-primary rounded-pill py-3 fw-bold shadow fs-5" <?php echo !$has_initial_room_type ? 'disabled' : ''; ?>>
-                                <i class="fas fa-check-circle me-2"></i> Konfirmasi & Lanjut ke Pembayaran
+                                <span id="btnSubmitText"><i class="fas fa-university me-2"></i> Konfirmasi & Lanjut Pembayaran Transfer</span>
                             </button>
                         </div>
                     </form>
@@ -744,6 +922,31 @@ $(document).ready(function() {
 
     $('#check_out').on('change', function() {
         updateAvailability();
+    });
+
+    // Payment method selector
+    window.selectPaymentMethod = function(val) {
+        $('input[name="payment_method"][value="' + val + '"]').prop('checked', true);
+        $('.payment-card-option').removeClass('active');
+        $('input[name="payment_method"][value="' + val + '"]').closest('.payment-card-option').addClass('active');
+        
+        if (val === 'cash') {
+            $('#btnSubmitText').html('<i class="fas fa-check-circle me-2"></i> Konfirmasi Reservasi (Bayar di Hotel)');
+            $('#pay_method_summary').removeClass('bg-primary bg-success bg-warning').addClass('bg-info text-dark').text('Bayar di Hotel');
+        } else if (val === 'qris') {
+            $('#btnSubmitText').html('<i class="fas fa-qrcode me-2"></i> Lanjutkan Pembayaran QRIS');
+            $('#pay_method_summary').removeClass('bg-primary bg-info bg-warning').addClass('bg-success text-white').text('QRIS / E-Wallet');
+        } else if (val === 'credit_card') {
+            $('#btnSubmitText').html('<i class="fas fa-credit-card me-2"></i> Lanjutkan Pembayaran Kartu');
+            $('#pay_method_summary').removeClass('bg-primary bg-info bg-success').addClass('bg-warning text-dark').text('Kartu Kredit/Debit');
+        } else {
+            $('#btnSubmitText').html('<i class="fas fa-university me-2"></i> Konfirmasi & Lanjut Pembayaran Transfer');
+            $('#pay_method_summary').removeClass('bg-info bg-success bg-warning').addClass('bg-primary text-white').text('Transfer Bank');
+        }
+    };
+
+    $('input[name="payment_method"]').on('change', function() {
+        selectPaymentMethod($(this).val());
     });
 
     // Run initial sync directly from DOM option
