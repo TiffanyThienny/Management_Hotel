@@ -163,29 +163,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             box-shadow: 0 14px 24px rgba(79, 70, 229, 0.4);
             color: white;
         }
-        .demo-chip {
-            background: #f1f5f9;
-            border: 1px solid #cbd5e1;
-            padding: 0.5rem 0.75rem;
-            border-radius: 10px;
-            font-size: 0.825rem;
-            font-weight: 600;
-            color: #334155;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            gap: 0.4rem;
-            justify-content: center;
-        }
-        .demo-chip:hover {
-            background: #4f46e5;
-            color: white;
-            border-color: #4f46e5;
-        }
-        .demo-chip i {
-            font-size: 0.9rem;
-        }
         .input-group-text {
             border-radius: 12px;
             background: #f8fafc;
@@ -202,7 +179,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             </div>
             
             <h3 class="fw-bold mb-1" style="font-family: 'Outfit', sans-serif;">Grand Luxury Hotel</h3>
-            <p class="text-muted small mb-4">Masuk ke Portal Manajemen & Pemesanan Hotel</p>
+            <p class="text-muted small mb-4">Masuk ke Portal Hotel</p>
 
             <?php if ($error): ?>
                 <div class="alert alert-danger alert-dismissible fade show text-start py-2 px-3 small rounded-3" role="alert">
@@ -233,48 +210,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     </div>
                 </div>
 
-                <button type="submit" class="btn btn-submit w-100 mb-4">
-                    <i class="fas fa-sign-in-alt me-2"></i>Masuk Sekarang
+                <button type="submit" class="btn btn-submit w-100 mb-3">
+                    <i class="fas fa-sign-in-alt me-2"></i>Masuk
                 </button>
             </form>
 
-            <!-- Quick Demo Credentials Fill Buttons -->
-            <div class="p-3 bg-light rounded-4 text-start border border-slate-200">
-                <p class="mb-2 text-center text-uppercase fw-bold text-muted" style="font-size: 0.725rem; letter-spacing: 0.05em;">
-                    ⚡ Klik Untuk Isi Otomatis Account Demo
-                </p>
-                <div class="row g-2">
-                    <div class="col-3">
-                        <div class="demo-chip" onclick="fillDemo('admin', 'admin123')">
-                            <i class="fas fa-user-shield text-danger"></i> Admin
-                        </div>
-                    </div>
-                    <div class="col-3">
-                        <div class="demo-chip" onclick="fillDemo('owner', 'password')">
-                            <i class="fas fa-crown text-warning"></i> Owner
-                        </div>
-                    </div>
-                    <div class="col-3">
-                        <div class="demo-chip" onclick="fillDemo('reception', 'password')">
-                            <i class="fas fa-concierge-bell text-info"></i> Resepsi
-                        </div>
-                    </div>
-                    <div class="col-3">
-                        <div class="demo-chip" onclick="fillDemo('user1', 'password')">
-                            <i class="fas fa-user text-primary"></i> Tamu
-                        </div>
-                    </div>
-                </div>
-                <div class="mt-2 text-center" style="font-size: 0.775rem; color: #475569;">
-                    👑 <strong>Owner:</strong> <code>owner</code> | <strong>Admin:</strong> <code>admin</code> | <strong>Resepsi:</strong> <code>reception</code> (Password: <code>password</code>)
-                </div>
-            </div>
-
-            <div class="mt-4 text-center">
+            <div class="mt-3 text-center">
                 <small class="text-muted">
                     Belum punya akun? <a href="register.php" class="text-primary fw-semibold text-decoration-none">Daftar Akun Baru</a>
                 </small>
-                <div class="mt-2">
+                <div class="mt-3">
                     <a href="index.php" class="text-muted small text-decoration-none"><i class="fas fa-arrow-left me-1"></i> Kembali ke Beranda</a>
                 </div>
             </div>
@@ -283,11 +228,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        function fillDemo(username, password) {
-            document.getElementById('username').value = username;
-            document.getElementById('password').value = password;
-        }
-
         document.getElementById('togglePassword').addEventListener('click', function() {
             const passwordInput = document.getElementById('password');
             const eyeIcon = document.getElementById('eyeIcon');

@@ -15,7 +15,10 @@ if (!$booking_id) {
 
 // Get booking details
 $booking = $database->getSingle("
-    SELECT b.*, r.room_number, rt.type_name, c.full_name, c.email, c.phone,
+    SELECT b.*, 
+           GROUP_CONCAT(DISTINCT r.room_number ORDER BY r.room_number SEPARATOR ', ') as room_number,
+           COUNT(DISTINCT bd.id) as total_rooms_booked,
+           rt.type_name, c.full_name, c.email, c.phone,
            (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE booking_id = b.id AND payment_status != 'refunded') as paid_amount
     FROM bookings b
     JOIN booking_details bd ON b.id = bd.booking_id
@@ -23,6 +26,7 @@ $booking = $database->getSingle("
     JOIN room_types rt ON r.room_type_id = rt.id
     JOIN customers c ON b.customer_id = c.id
     WHERE b.id = ? AND b.user_id = ?
+    GROUP BY b.id
 ", [$booking_id, $user_id]);
 
 if (!$booking) {

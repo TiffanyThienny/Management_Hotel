@@ -15,7 +15,10 @@ if (!$booking_id) {
 
 // Get booking details
 $booking = $database->getSingle("
-    SELECT b.*, r.room_number, r.floor, r.view_type, rt.type_name, rt.description as room_description,
+    SELECT b.*, 
+           GROUP_CONCAT(DISTINCT r.room_number ORDER BY r.room_number SEPARATOR ', ') as room_number,
+           COUNT(DISTINCT bd.id) as total_rooms_booked,
+           r.floor, r.view_type, rt.type_name, rt.description as room_description,
            rt.capacity, rt.size, rt.bed_type, rt.image as room_image, c.full_name, c.email, c.phone, c.identity_number,
            u.username, u.full_name as booked_by
     FROM bookings b
@@ -25,6 +28,7 @@ $booking = $database->getSingle("
     JOIN customers c ON b.customer_id = c.id
     JOIN users u ON b.user_id = u.id
     WHERE b.id = ? AND b.user_id = ?
+    GROUP BY b.id
 ", [$booking_id, $user_id]);
 
 if (!$booking) {

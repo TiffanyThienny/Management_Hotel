@@ -16,7 +16,10 @@ $current_status = $_GET['status'] ?? '';
 $current_search = $_GET['search'] ?? '';
 
 // Build query with safe LEFT JOINs
-$query = "SELECT b.*, r.room_number, rt.type_name, rt.base_price, rt.image as room_image,
+$query = "SELECT b.*, 
+                 GROUP_CONCAT(DISTINCT r.room_number ORDER BY r.room_number SEPARATOR ', ') as room_number,
+                 COUNT(DISTINCT bd.id) as total_rooms_booked,
+                 rt.type_name, rt.base_price, rt.image as room_image,
                  p.payment_status, p.payment_method, p.amount as paid_amount,
                  c.full_name as customer_name
           FROM bookings b

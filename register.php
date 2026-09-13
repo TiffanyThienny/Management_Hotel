@@ -25,8 +25,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $address = trim(htmlspecialchars($_POST['address'] ?? ''));
     
     // Validation
-    if (empty($username) || empty($password) || empty($email) || empty($full_name)) {
-        $error = "Semua field bertanda bintang (*) wajib diisi!";
+    if (empty($username) || empty($password) || empty($confirm_password) || empty($email) || empty($full_name) || empty($phone) || empty($address)) {
+        $error = "Semua field wajib diisi!";
     } elseif ($password !== $confirm_password) {
         $error = "Password dan konfirmasi password tidak cocok!";
     } elseif (strlen($password) < 6) {
@@ -96,7 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
         .register-wrapper {
             width: 100%;
-            max-width: 560px;
+            max-width: 580px;
         }
         .glass-card {
             background: rgba(255, 255, 255, 0.95);
@@ -125,6 +125,28 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             border: 1.5px solid #e2e8f0;
             font-size: 0.925rem;
         }
+        .form-control:focus {
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+        }
+        .input-group .form-control {
+            border-top-right-radius: 0;
+            border-bottom-right-radius: 0;
+        }
+        .input-group .toggle-btn {
+            border-top-right-radius: 10px;
+            border-bottom-right-radius: 10px;
+            border: 1.5px solid #e2e8f0;
+            border-left: none;
+            background: #f8fafc;
+            color: #64748b;
+            padding: 0.75rem 0.95rem;
+            transition: all 0.2s ease;
+        }
+        .input-group .toggle-btn:hover {
+            background: #f1f5f9;
+            color: #4f46e5;
+        }
         .btn-submit {
             background: var(--brand-gradient);
             border: none;
@@ -133,10 +155,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             padding: 0.85rem;
             border-radius: 12px;
             box-shadow: 0 10px 20px rgba(79, 70, 229, 0.3);
+            transition: all 0.2s ease;
         }
         .btn-submit:hover {
             color: white;
             transform: translateY(-2px);
+            box-shadow: 0 14px 24px rgba(79, 70, 229, 0.4);
         }
     </style>
 </head>
@@ -170,31 +194,41 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label small fw-semibold text-secondary">Nama Lengkap *</label>
-                        <input type="text" class="form-control" name="full_name" required value="<?php echo htmlspecialchars($_POST['full_name'] ?? ''); ?>">
+                        <input type="text" class="form-control" name="full_name" required placeholder="Contoh: Lala Safitri" value="<?php echo htmlspecialchars($_POST['full_name'] ?? ''); ?>">
                     </div>
                     <div class="col-md-6">
                         <label class="form-label small fw-semibold text-secondary">Username *</label>
-                        <input type="text" class="form-control" name="username" required value="<?php echo htmlspecialchars($_POST['username'] ?? ''); ?>">
+                        <input type="text" class="form-control" name="username" required placeholder="Contoh: lala123" value="<?php echo htmlspecialchars($_POST['username'] ?? ''); ?>">
                     </div>
                     <div class="col-md-6">
                         <label class="form-label small fw-semibold text-secondary">Email *</label>
-                        <input type="email" class="form-control" name="email" required value="<?php echo htmlspecialchars($_POST['email'] ?? ''); ?>">
+                        <input type="email" class="form-control" name="email" required placeholder="nama@email.com" value="<?php echo htmlspecialchars($_POST['email'] ?? ''); ?>">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label small fw-semibold text-secondary">No. Telepon / WhatsApp</label>
-                        <input type="text" class="form-control" name="phone" value="<?php echo htmlspecialchars($_POST['phone'] ?? ''); ?>">
+                        <label class="form-label small fw-semibold text-secondary">No. Telepon / WhatsApp *</label>
+                        <input type="text" class="form-control" name="phone" required placeholder="08xxxxxxxxxx" value="<?php echo htmlspecialchars($_POST['phone'] ?? ''); ?>">
                     </div>
                     <div class="col-md-6">
                         <label class="form-label small fw-semibold text-secondary">Password *</label>
-                        <input type="password" class="form-control" name="password" required placeholder="Min. 6 karakter">
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="password" name="password" required placeholder="Min. 6 karakter">
+                            <button class="btn toggle-btn" type="button" onclick="togglePasswordVisibility('password', 'eyeIconPassword')" title="Tampilkan / Sembunyikan Password">
+                                <i class="fas fa-eye" id="eyeIconPassword"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label small fw-semibold text-secondary">Konfirmasi Password *</label>
-                        <input type="password" class="form-control" name="confirm_password" required placeholder="Ulangi password">
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="confirm_password" name="confirm_password" required placeholder="Ulangi password">
+                            <button class="btn toggle-btn" type="button" onclick="togglePasswordVisibility('confirm_password', 'eyeIconConfirm')" title="Tampilkan / Sembunyikan Konfirmasi Password">
+                                <i class="fas fa-eye" id="eyeIconConfirm"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="col-12">
-                        <label class="form-label small fw-semibold text-secondary">Alamat Lengkap</label>
-                        <textarea class="form-control" name="address" rows="2"><?php echo htmlspecialchars($_POST['address'] ?? ''); ?></textarea>
+                        <label class="form-label small fw-semibold text-secondary">Alamat Lengkap *</label>
+                        <textarea class="form-control" name="address" rows="2" required placeholder="Masukkan alamat lengkap tempat tinggal Anda"><?php echo htmlspecialchars($_POST['address'] ?? ''); ?></textarea>
                     </div>
                 </div>
 
@@ -214,5 +248,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             </div>
         </div>
     </div>
+
+    <script>
+        function togglePasswordVisibility(inputId, iconId) {
+            const inputField = document.getElementById(inputId);
+            const icon = document.getElementById(iconId);
+            
+            if (inputField.type === 'password') {
+                inputField.type = 'text';
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            } else {
+                inputField.type = 'password';
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            }
+        }
+    </script>
 </body>
 </html>
