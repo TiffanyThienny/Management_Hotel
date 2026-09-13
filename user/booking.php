@@ -562,19 +562,19 @@ if ($selected_room_type && isset($selected_room_type['available_rooms'])) {
 
                             <div class="row g-3 mb-3">
                                 <!-- Transfer Bank -->
-                                <div class="col-md-6">
+                                <div class="col-md-4">
                                     <div class="payment-card-option active h-100" onclick="selectPaymentMethod('transfer')">
                                         <div class="d-flex align-items-center justify-content-between mb-2">
                                             <div class="form-check mb-0">
                                                 <input class="form-check-input" type="radio" name="payment_method" id="pay_transfer" value="transfer" checked>
                                                 <label class="form-check-label fw-bold text-dark cursor-pointer ms-1" for="pay_transfer">
-                                                    Transfer Bank (Virtual Account)
+                                                    Transfer Bank
                                                 </label>
                                             </div>
                                             <i class="fas fa-university text-primary fs-5"></i>
                                         </div>
                                         <p class="text-muted small mb-2 ps-4" style="font-size: 0.82rem;">
-                                            Transfer manual atau VA instan ke rekening resmi BCA, Mandiri, BNI, BRI.
+                                            Transfer ke rekening resmi BCA, Mandiri, BNI, BRI.
                                         </p>
                                         <div class="ps-4 d-flex gap-1 flex-wrap">
                                             <span class="badge bg-light text-dark border" style="font-size: 0.72rem;">BCA</span>
@@ -585,44 +585,20 @@ if ($selected_room_type && isset($selected_room_type['available_rooms'])) {
                                     </div>
                                 </div>
 
-                                <!-- QRIS / E-Wallet -->
-                                <div class="col-md-6">
-                                    <div class="payment-card-option h-100" onclick="selectPaymentMethod('qris')">
-                                        <div class="d-flex align-items-center justify-content-between mb-2">
-                                            <div class="form-check mb-0">
-                                                <input class="form-check-input" type="radio" name="payment_method" id="pay_qris" value="qris">
-                                                <label class="form-check-label fw-bold text-dark cursor-pointer ms-1" for="pay_qris">
-                                                    QRIS / E-Wallet Instan
-                                                </label>
-                                            </div>
-                                            <i class="fas fa-qrcode text-success fs-5"></i>
-                                        </div>
-                                        <p class="text-muted small mb-2 ps-4" style="font-size: 0.82rem;">
-                                            Scan QRIS langsung menggunakan GoPay, OVO, DANA, ShopeePay, LinkAja.
-                                        </p>
-                                        <div class="ps-4 d-flex gap-1 flex-wrap">
-                                            <span class="badge bg-success text-white" style="font-size: 0.72rem;">QRIS</span>
-                                            <span class="badge bg-light text-dark border" style="font-size: 0.72rem;">GoPay</span>
-                                            <span class="badge bg-light text-dark border" style="font-size: 0.72rem;">OVO</span>
-                                            <span class="badge bg-light text-dark border" style="font-size: 0.72rem;">DANA</span>
-                                        </div>
-                                    </div>
-                                </div>
-
                                 <!-- Kartu Kredit / Debit -->
-                                <div class="col-md-6">
+                                <div class="col-md-4">
                                     <div class="payment-card-option h-100" onclick="selectPaymentMethod('credit_card')">
                                         <div class="d-flex align-items-center justify-content-between mb-2">
                                             <div class="form-check mb-0">
                                                 <input class="form-check-input" type="radio" name="payment_method" id="pay_cc" value="credit_card">
                                                 <label class="form-check-label fw-bold text-dark cursor-pointer ms-1" for="pay_cc">
-                                                    Kartu Kredit / Debit Online
+                                                    Kartu Kredit / Debit
                                                 </label>
                                             </div>
                                             <i class="fas fa-credit-card text-warning fs-5"></i>
                                         </div>
                                         <p class="text-muted small mb-2 ps-4" style="font-size: 0.82rem;">
-                                            Pembayaran online instan via jaringan Visa, MasterCard, atau JCB.
+                                            Pembayaran via jaringan Visa, MasterCard, JCB.
                                         </p>
                                         <div class="ps-4 d-flex gap-1 flex-wrap">
                                             <span class="badge bg-light text-dark border" style="font-size: 0.72rem;"><i class="fab fa-cc-visa text-primary me-1"></i>Visa</span>
@@ -633,22 +609,22 @@ if ($selected_room_type && isset($selected_room_type['available_rooms'])) {
                                 </div>
 
                                 <!-- Bayar di Hotel -->
-                                <div class="col-md-6">
+                                <div class="col-md-4">
                                     <div class="payment-card-option h-100" onclick="selectPaymentMethod('cash')">
                                         <div class="d-flex align-items-center justify-content-between mb-2">
                                             <div class="form-check mb-0">
                                                 <input class="form-check-input" type="radio" name="payment_method" id="pay_cash" value="cash">
                                                 <label class="form-check-label fw-bold text-dark cursor-pointer ms-1" for="pay_cash">
-                                                    Bayar di Hotel (Pay at Hotel)
+                                                    Bayar di Hotel
                                                 </label>
                                             </div>
                                             <i class="fas fa-hotel text-info fs-5"></i>
                                         </div>
                                         <p class="text-muted small mb-2 ps-4" style="font-size: 0.82rem;">
-                                            Pesan tanpa bayar di awal. Pelunasan tunai/debit saat tiba di meja resepsionis.
+                                            Pesan sekarang. Pelunasan saat tiba di resepsionis.
                                         </p>
                                         <div class="ps-4">
-                                            <span class="badge bg-info text-dark" style="font-size: 0.72rem;"><i class="fas fa-check-circle me-1"></i>Tanpa DP / Bebas Biaya Awal</span>
+                                            <span class="badge bg-info text-dark" style="font-size: 0.72rem;"><i class="fas fa-check-circle me-1"></i>Tanpa DP</span>
                                         </div>
                                     </div>
                                 </div>
@@ -933,9 +909,6 @@ $(document).ready(function() {
         if (val === 'cash') {
             $('#btnSubmitText').html('<i class="fas fa-check-circle me-2"></i> Konfirmasi Reservasi (Bayar di Hotel)');
             $('#pay_method_summary').removeClass('bg-primary bg-success bg-warning').addClass('bg-info text-dark').text('Bayar di Hotel');
-        } else if (val === 'qris') {
-            $('#btnSubmitText').html('<i class="fas fa-qrcode me-2"></i> Lanjutkan Pembayaran QRIS');
-            $('#pay_method_summary').removeClass('bg-primary bg-info bg-warning').addClass('bg-success text-white').text('QRIS / E-Wallet');
         } else if (val === 'credit_card') {
             $('#btnSubmitText').html('<i class="fas fa-credit-card me-2"></i> Lanjutkan Pembayaran Kartu');
             $('#pay_method_summary').removeClass('bg-primary bg-info bg-success').addClass('bg-warning text-dark').text('Kartu Kredit/Debit');

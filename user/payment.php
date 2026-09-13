@@ -195,8 +195,7 @@ $remaining_amount = max(0, $booking['final_amount'] - $booking['paid_amount']);
                                 <select class="form-select form-control-luxury" name="payment_method" id="payment_method" required>
                                     <option value="">-- Pilih Metode Pembayaran --</option>
                                     <option value="transfer" <?php echo ($selected_method === 'transfer') ? 'selected' : ''; ?>>Transfer Bank (BCA / Mandiri / BNI / BRI)</option>
-                                    <option value="qris" <?php echo ($selected_method === 'qris') ? 'selected' : ''; ?>>QRIS (GoPay, OVO, ShopeePay, DANA, LinkAja)</option>
-                                    <option value="credit_card" <?php echo ($selected_method === 'credit_card') ? 'selected' : ''; ?>>Kartu Kredit / Debit</option>
+                                    <option value="credit_card" <?php echo ($selected_method === 'credit_card') ? 'selected' : ''; ?>>Kartu Kredit / Debit Online</option>
                                     <option value="cash" <?php echo ($selected_method === 'cash') ? 'selected' : ''; ?>>Bayar Tunai di Resepsionis</option>
                                 </select>
                             </div>
@@ -248,15 +247,6 @@ $remaining_amount = max(0, $booking['final_amount'] - $booking['paid_amount']);
                                 <small class="text-muted"><i class="fas fa-exclamation-circle me-1"></i>Sertakan kode booking <strong>#<?php echo htmlspecialchars($booking['booking_code']); ?></strong> pada berita transfer.</small>
                             </div>
 
-                            <div id="qris_instructions" style="display: none;" class="text-center">
-                                <h6 class="fw-bold text-dark mb-2"><i class="fas fa-qrcode text-primary me-2"></i>Scan QRIS Resmi Hotel</h6>
-                                <p class="text-muted small mb-2">Buka aplikasi mobile banking atau e-wallet Anda lalu scan kode di bawah ini:</p>
-                                <div class="bg-white p-3 d-inline-block rounded-3 border shadow-sm mb-2">
-                                    <i class="fas fa-qrcode fa-5x text-dark"></i>
-                                </div>
-                                <div><span class="badge bg-success rounded-pill px-3 py-1">NMID: ID1029384756</span></div>
-                            </div>
-
                             <div id="credit_card_instructions" style="display: none;">
                                 <h6 class="fw-bold text-dark mb-2"><i class="fas fa-credit-card text-warning me-2"></i>Pembayaran Kartu Kredit / Debit</h6>
                                 <p class="text-muted small mb-2">Gunakan kartu berlogo Visa, MasterCard, atau JCB Anda untuk konfirmasi pelunasan.</p>
@@ -275,7 +265,7 @@ $remaining_amount = max(0, $booking['final_amount'] - $booking['paid_amount']);
                             </div>
 
                             <div id="default_instructions">
-                                <p class="text-muted small mb-0"><i class="fas fa-hand-point-up me-1 text-primary"></i>Pilih salah satu metode pembayaran di atas untuk melihat instruksi transfer & QRIS.</p>
+                                <p class="text-muted small mb-0"><i class="fas fa-hand-point-up me-1 text-primary"></i>Pilih salah satu metode pembayaran di atas untuk melihat instruksi.</p>
                             </div>
                         </div>
 
@@ -391,14 +381,12 @@ $remaining_amount = max(0, $booking['final_amount'] - $booking['paid_amount']);
 $(document).ready(function() {
     $('#payment_method').on('change', function() {
         var method = $(this).val();
-        $('#transfer_instructions, #qris_instructions, #credit_card_instructions, #cash_instructions, #default_instructions').hide();
+        $('#transfer_instructions, #credit_card_instructions, #cash_instructions, #default_instructions').hide();
         $('#bank_info').hide();
         
         if (method === 'transfer') {
             $('#transfer_instructions').show();
             $('#bank_info').show();
-        } else if (method === 'qris') {
-            $('#qris_instructions').show();
         } else if (method === 'credit_card') {
             $('#credit_card_instructions').show();
         } else if (method === 'cash') {
