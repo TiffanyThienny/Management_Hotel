@@ -1,0 +1,5 @@
+cookies*.txt
+scratch/
+*.log
+.DS_Store
+Thumbs.db
