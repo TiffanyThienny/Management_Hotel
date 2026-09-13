@@ -165,8 +165,37 @@ $remaining_amount = max(0, $booking['final_amount'] - $total_paid);
                     </a>
                 </div>
             </div>
+    <?php 
+    $primary_payment = !empty($payments) ? $payments[0] : null;
+    $pay_method = $primary_payment['payment_method'] ?? 'cash';
+    $pay_status = $primary_payment['payment_status'] ?? 'pending';
+    ?>
+
+    <?php if ($pay_status === 'paid' || $total_paid >= $booking['final_amount']): ?>
+    <div class="alert alert-success border-0 rounded-4 p-3 mb-4 shadow-sm d-flex align-items-center gap-3">
+        <i class="fas fa-check-circle fa-2x text-success"></i>
+        <div>
+            <h6 class="fw-bold mb-1 text-success">Pembayaran Lunas & Terkonfirmasi</h6>
+            <p class="mb-0 small text-dark">Seluruh tagihan reservasi Anda telah terbayar lunas. Silakan tunjukkan E-Voucher ini saat proses check-in di hotel.</p>
         </div>
     </div>
+    <?php elseif ($pay_method === 'cash'): ?>
+    <div class="alert alert-info border-0 rounded-4 p-3 mb-4 shadow-sm d-flex align-items-center gap-3">
+        <i class="fas fa-hotel fa-2x text-info"></i>
+        <div>
+            <h6 class="fw-bold mb-1 text-info">Metode: Bayar di Hotel (Pay at Hotel)</h6>
+            <p class="mb-0 small text-dark">Reservasi Anda telah terdaftar dan kamar telah dikunci. Pelunasan sebesar <strong><?php echo formatCurrency($booking['final_amount']); ?></strong> dapat dilakukan tunai/kartu saat tiba di resepsionis.</p>
+        </div>
+    </div>
+    <?php else: ?>
+    <div class="alert alert-warning border-0 rounded-4 p-3 mb-4 shadow-sm d-flex align-items-center gap-3">
+        <i class="fas fa-clock fa-2x text-warning"></i>
+        <div>
+            <h6 class="fw-bold mb-1 text-dark">Konfirmasi Transfer Diterima (Menunggu Verifikasi)</h6>
+            <p class="mb-0 small text-muted">Data transfer Anda (No. Ref: <strong><?php echo htmlspecialchars($primary_payment['transaction_id'] ?? '-'); ?></strong>) sedang dalam proses verifikasi tim keuangan kami.</p>
+        </div>
+    </div>
+    <?php endif; ?>
 
     <div class="row g-4">
         <!-- Left Side: Room & Stay Details -->

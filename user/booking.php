@@ -22,7 +22,7 @@ $page_title = "Formulir Pemesanan Kamar - Grand Luxury Hotel";
 include '../includes/header.php';
 
 // Get parameters
-$room_type_id = $_GET['room_type'] ?? '';
+$room_type_id = $_GET['room_type'] ?? $_GET['room_type_id'] ?? '';
 $check_in = $_GET['check_in'] ?? date('Y-m-d', strtotime('+1 day'));
 $check_out = $_GET['check_out'] ?? date('Y-m-d', strtotime('+3 days'));
 $guests = $_GET['guests'] ?? 2;
@@ -46,13 +46,16 @@ if ($_POST) {
         $id_number = trim(sanitizeInput($_POST['identity_number'] ?? ''));
         $cust_address = trim(sanitizeInput($_POST['customer_address'] ?? ''));
         $special_req = trim(sanitizeInput($_POST['special_requests'] ?? ''));
+        if (empty($special_req)) {
+            $special_req = '-';
+        }
 
-        // All fields are mandatory
+        // All mandatory fields validation
         if (empty($room_type_post_id) || empty($check_in_post) || empty($check_out_post) || 
             empty($num_rooms) || $adults_post < 1 || 
             empty($cust_name) || empty($cust_email) || empty($cust_phone) || 
-            empty($id_type) || empty($id_number) || empty($cust_address) || empty($special_req)) {
-            throw new Exception('Semua kolom bertanda bintang (*) wajib diisi lengkap!');
+            empty($id_type) || empty($id_number) || empty($cust_address)) {
+            throw new Exception('Semua kolom data tamu bertanda bintang (*) wajib diisi lengkap!');
         }
 
         // Validate dates
@@ -110,14 +113,34 @@ if ($_POST) {
         $price_per_room_total = $nights * $room_type['base_price'];
         $total_amount = $price_per_room_total * $num_rooms;
         
-        // Payment method selection
+        // Payment method selection & validation
         $payment_method = sanitizeInput($_POST['payment_method'] ?? 'transfer');
-        if (!in_array($payment_method, ['transfer', 'qris', 'credit_card', 'cash'])) {
+        if (!in_array($payment_method, ['transfer', 'credit_card', 'cash'])) {
             $payment_method = 'transfer';
         }
 
-        // Determine booking status
-        $booking_status = ($payment_method === 'cash') ? 'confirmed' : 'pending';
+        $sender_bank = trim(sanitizeInput($_POST['sender_bank'] ?? ''));
+        $sender_account = trim(sanitizeInput($_POST['sender_account'] ?? ''));
+        $transfer_ref = trim(sanitizeInput($_POST['transfer_ref'] ?? ''));
+        
+        $cc_name = trim(sanitizeInput($_POST['cc_name'] ?? ''));
+        $cc_number = trim(sanitizeInput($_POST['cc_number'] ?? ''));
+        $cc_exp = trim(sanitizeInput($_POST['cc_exp'] ?? ''));
+        $cc_cvv = trim(sanitizeInput($_POST['cc_cvv'] ?? ''));
+
+        if ($payment_method === 'transfer') {
+            if (empty($sender_bank) || empty($sender_account) || empty($transfer_ref)) {
+                throw new Exception('Harap lengkapi data transfer bank: Nama Bank Pengirim, Nomor Rekening, dan Nomor Referensi Transfer.');
+            }
+        } elseif ($payment_method === 'credit_card') {
+            if (empty($cc_name) || empty($cc_number) || empty($cc_exp) || empty($cc_cvv)) {
+                throw new Exception('Harap lengkapi data kartu kredit: Nama Pemegang Kartu, Nomor Kartu, Masa Berlaku, dan CVV.');
+            }
+        }
+
+        // Determine initial booking & payment status
+        $booking_status = 'confirmed';
+        $payment_status = ($payment_method === 'credit_card') ? 'paid' : 'pending';
 
         // Create booking
         $booking_data = [
@@ -164,34 +187,61 @@ if ($_POST) {
             $room_stmt->execute([$assigned_room_id]);
         }
 
-        // Create initial payment record only for cash (Pay at Hotel)
-        if ($payment_method === 'cash') {
+        // Create payment record based on selected method
+        if ($payment_method === 'transfer') {
+            $payment_data = [
+                'booking_id' => $booking_id,
+                'amount' => $total_amount,
+                'payment_method' => 'transfer',
+                'payment_status' => 'pending',
+                'transaction_id' => $transfer_ref,
+                'bank_name' => $sender_bank,
+                'account_number' => $sender_account,
+                'notes' => 'Transfer Bank dari ' . $cust_name . ' (' . $sender_bank . ' - ' . $sender_account . ')'
+            ];
+        } elseif ($payment_method === 'credit_card') {
+            $clean_cc = preg_replace('/\D/', '', $cc_number);
+            $last4 = substr($clean_cc, -4);
+            $payment_data = [
+                'booking_id' => $booking_id,
+                'amount' => $total_amount,
+                'payment_method' => 'credit_card',
+                'payment_status' => 'paid',
+                'transaction_id' => 'CC-' . strtoupper(substr(uniqid(), -8)),
+                'bank_name' => 'Online Card (' . $cc_name . ')',
+                'account_number' => '****-****-****-' . $last4,
+                'notes' => 'Pembayaran Kartu Kredit/Debit Online Berhasil (Auth: ' . rand(100000, 999999) . ')'
+            ];
+        } else { // cash (Pay at Hotel)
             $payment_data = [
                 'booking_id' => $booking_id,
                 'amount' => $total_amount,
                 'payment_method' => 'cash',
                 'payment_status' => 'pending',
                 'transaction_id' => 'HOTEL-' . strtoupper(substr(uniqid(), -8)),
-                'bank_name' => 'Cash/Front Desk',
-                'notes' => 'Pembayaran tunai / kartu langsung di hotel saat check-in.'
+                'bank_name' => 'Front Desk / Cash',
+                'account_number' => '-',
+                'notes' => 'Pembayaran langsung di hotel saat check-in.'
             ];
-            
-            $payment_query = "INSERT INTO payments (booking_id, amount, payment_method, payment_status, transaction_id, bank_name, notes) 
-                              VALUES (:booking_id, :amount, :payment_method, :payment_status, :transaction_id, :bank_name, :notes)";
-            $payment_stmt = $db->prepare($payment_query);
-            $payment_stmt->execute($payment_data);
         }
+        
+        $payment_query = "INSERT INTO payments (booking_id, amount, payment_method, payment_status, transaction_id, bank_name, account_number, notes) 
+                          VALUES (:booking_id, :amount, :payment_method, :payment_status, :transaction_id, :bank_name, :account_number, :notes)";
+        $payment_stmt = $db->prepare($payment_query);
+        $payment_stmt->execute($payment_data);
         
         $db->commit();
         
-        // Redirect according to payment method
-        if ($payment_method === 'cash') {
-            setFlashMessage('success', "Reservasi untuk {$num_rooms} kamar berhasil dibuat! Pembayaran dapat dilakukan langsung di hotel saat check-in.");
-            redirect("booking_detail.php?id=" . $booking_id);
+        // Direct redirect to E-Voucher / Booking Detail page
+        if ($payment_method === 'credit_card') {
+            setFlashMessage('success', "Pembayaran kartu sukses! Reservasi untuk {$num_rooms} kamar telah terkonfirmasi.");
+        } elseif ($payment_method === 'transfer') {
+            setFlashMessage('success', "Reservasi untuk {$num_rooms} kamar berhasil dibuat! Konfirmasi transfer Anda telah kami terima dan sedang diverifikasi.");
         } else {
-            setFlashMessage('success', "Reservasi untuk {$num_rooms} kamar berhasil dibuat! Silakan lengkapi konfirmasi pembayaran Anda.");
-            redirect("payment.php?booking_id=" . $booking_id . "&method=" . $payment_method);
+            setFlashMessage('success', "Reservasi untuk {$num_rooms} kamar berhasil dibuat! Pembayaran dapat dilakukan saat check-in di hotel.");
         }
+        
+        redirect("booking_detail.php?id=" . $booking_id);
         
     } catch (Exception $e) {
         $db->rollBack();
@@ -627,6 +677,79 @@ if ($selected_room_type && isset($selected_room_type['available_rooms'])) {
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- Dynamic Payment Detail Fields -->
+                            <!-- Detail Transfer Bank -->
+                            <div id="transfer_fields" class="p-3 bg-light rounded-3 border mb-3">
+                                <div class="mb-3">
+                                    <h6 class="fw-bold text-dark small mb-2"><i class="fas fa-university text-primary me-1"></i>Rekening Tujuan Resmi Hotel:</h6>
+                                    <div class="row g-2">
+                                        <div class="col-md-4 p-2 bg-white rounded-3 border">
+                                            <span class="text-muted small d-block">Bank BCA</span>
+                                            <strong class="text-dark">1234-567-890</strong>
+                                            <div class="small text-muted" style="font-size: 0.75rem;">a.n PT Grand Luxury Resort</div>
+                                        </div>
+                                        <div class="col-md-4 p-2 bg-white rounded-3 border">
+                                            <span class="text-muted small d-block">Bank Mandiri</span>
+                                            <strong class="text-dark">0987-654-321</strong>
+                                            <div class="small text-muted" style="font-size: 0.75rem;">a.n PT Grand Luxury Resort</div>
+                                        </div>
+                                        <div class="col-md-4 p-2 bg-white rounded-3 border">
+                                            <span class="text-muted small d-block">Bank BNI</span>
+                                            <strong class="text-dark">1122-334-455</strong>
+                                            <div class="small text-muted" style="font-size: 0.75rem;">a.n PT Grand Luxury Resort</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label small fw-bold text-dark">Nama Bank Pengirim <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control form-control-luxury" name="sender_bank" id="sender_bank" placeholder="Contoh: BCA / Mandiri / BRI">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small fw-bold text-dark">Nomor Rekening Pengirim <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control form-control-luxury" name="sender_account" id="sender_account" placeholder="Nomor rekening Anda">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small fw-bold text-dark">ID / No. Referensi Transfer <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control form-control-luxury" name="transfer_ref" id="transfer_ref" placeholder="Contoh: TRXBCA9871239">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Detail Kartu Kredit / Debit -->
+                            <div id="credit_card_fields" class="p-3 bg-light rounded-3 border mb-3" style="display: none;">
+                                <h6 class="fw-bold text-dark small mb-2"><i class="fas fa-credit-card text-warning me-1"></i>Informasi Kartu Kredit / Debit Online:</h6>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold text-dark">Nama Pemegang Kartu <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control form-control-luxury" name="cc_name" id="cc_name" placeholder="Nama sesuai pada kartu">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold text-dark">Nomor Kartu (16 Digit) <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control form-control-luxury" name="cc_number" id="cc_number" placeholder="4xxx xxxx xxxx xxxx" maxlength="19">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold text-dark">Masa Berlaku (MM/YY) <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control form-control-luxury" name="cc_exp" id="cc_exp" placeholder="MM/YY" maxlength="5">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small fw-bold text-dark">Kode CVV (3 Digit) <span class="text-danger">*</span></label>
+                                        <input type="password" class="form-control form-control-luxury" name="cc_cvv" id="cc_cvv" placeholder="123" maxlength="4">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Detail Bayar di Hotel -->
+                            <div id="cash_fields" class="p-3 bg-light rounded-3 border mb-3" style="display: none;">
+                                <div class="d-flex align-items-center gap-3">
+                                    <i class="fas fa-info-circle text-info fs-4"></i>
+                                    <div>
+                                        <strong class="text-dark small">Bayar di Tempat (Front Desk):</strong>
+                                        <p class="mb-0 text-muted small">Anda tidak perlu membayar sekarang. E-voucher reservasi langsung diterbitkan dan pembayaran dapat diselesaikan tunai/kartu saat tiba di hotel.</p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <hr class="my-4 border-light">
@@ -673,7 +796,7 @@ if ($selected_room_type && isset($selected_room_type['available_rooms'])) {
                                             <ul class="text-muted small mb-0 ps-3" style="line-height: 1.6; font-size: 0.8rem;">
                                                 <li>Check-in mulai pukul <strong><?php echo CHECK_IN_TIME; ?> WIB</strong></li>
                                                 <li>Check-out maksimal pukul <strong><?php echo CHECK_OUT_TIME; ?> WIB</strong></li>
-                                                <li>E-voucher instan diterbitkan otomatis setelah konfirmasi</li>
+                                                <li>E-voucher instan diterbitkan langsung setelah pemesanan</li>
                                             </ul>
                                         </div>
                                     </div>
@@ -684,7 +807,7 @@ if ($selected_room_type && isset($selected_room_type['available_rooms'])) {
                         <!-- Submit Button -->
                         <div class="d-grid">
                             <button type="submit" id="btnSubmit" class="btn btn-primary rounded-pill py-3 fw-bold shadow fs-5" <?php echo !$has_initial_room_type ? 'disabled' : ''; ?>>
-                                <span id="btnSubmitText"><i class="fas fa-university me-2"></i> Konfirmasi & Lanjut Pembayaran Transfer</span>
+                                <span id="btnSubmitText"><i class="fas fa-check-circle me-2"></i> Konfirmasi & Selesaikan Pemesanan</span>
                             </button>
                         </div>
                     </form>
@@ -904,20 +1027,50 @@ $(document).ready(function() {
         $('.payment-card-option').removeClass('active');
         $('input[name="payment_method"][value="' + val + '"]').closest('.payment-card-option').addClass('active');
         
+        $('#transfer_fields, #credit_card_fields, #cash_fields').hide();
+        
         if (val === 'cash') {
-            $('#btnSubmitText').html('<i class="fas fa-check-circle me-2"></i> Konfirmasi Reservasi (Bayar di Hotel)');
+            $('#cash_fields').show();
+            $('#btnSubmitText').html('<i class="fas fa-check-circle me-2"></i> Konfirmasi Pemesanan (Bayar di Hotel)');
             $('#pay_method_summary').removeClass('bg-primary bg-success bg-warning').addClass('bg-info text-dark').text('Bayar di Hotel');
         } else if (val === 'credit_card') {
-            $('#btnSubmitText').html('<i class="fas fa-credit-card me-2"></i> Lanjutkan Pembayaran Kartu');
+            $('#credit_card_fields').show();
+            $('#btnSubmitText').html('<i class="fas fa-credit-card me-2"></i> Konfirmasi & Bayar dengan Kartu');
             $('#pay_method_summary').removeClass('bg-primary bg-info bg-success').addClass('bg-warning text-dark').text('Kartu Kredit/Debit');
         } else {
-            $('#btnSubmitText').html('<i class="fas fa-university me-2"></i> Konfirmasi & Lanjut Pembayaran Transfer');
+            $('#transfer_fields').show();
+            $('#btnSubmitText').html('<i class="fas fa-university me-2"></i> Konfirmasi & Selesaikan Pemesanan Transfer');
             $('#pay_method_summary').removeClass('bg-info bg-success bg-warning').addClass('bg-primary text-white').text('Transfer Bank');
         }
     };
 
     $('input[name="payment_method"]').on('change', function() {
         selectPaymentMethod($(this).val());
+    });
+
+    // Form submit validation
+    $('#bookingForm').on('submit', function(e) {
+        var method = $('input[name="payment_method"]:checked').val();
+        if (method === 'transfer') {
+            var sBank = $.trim($('#sender_bank').val());
+            var sAcc = $.trim($('#sender_account').val());
+            var sRef = $.trim($('#transfer_ref').val());
+            if (!sBank || !sAcc || !sRef) {
+                alert('Harap lengkapi informasi transfer: Nama Bank Pengirim, Nomor Rekening, dan ID/No. Referensi Transfer.');
+                e.preventDefault();
+                return false;
+            }
+        } else if (method === 'credit_card') {
+            var ccName = $.trim($('#cc_name').val());
+            var ccNum = $.trim($('#cc_number').val());
+            var ccExp = $.trim($('#cc_exp').val());
+            var ccCvv = $.trim($('#cc_cvv').val());
+            if (!ccName || !ccNum || !ccExp || !ccCvv) {
+                alert('Harap lengkapi informasi kartu kredit: Nama Pemegang Kartu, Nomor Kartu, Masa Berlaku, dan CVV.');
+                e.preventDefault();
+                return false;
+            }
+        }
     });
 
     // Run initial sync directly from DOM option
